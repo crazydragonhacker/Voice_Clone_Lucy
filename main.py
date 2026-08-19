@@ -93,8 +93,33 @@ def send_message():
 
     # Send message to Gemma
     response = chat(
-        model="gemma3:4b",
-        messages=[
+    model="gemma3:4b",
+    messages=[
+        {
+            "role": "system",
+            "content": """
+    You are an AI assistant with an anime-style character.
+
+    For every response, you MUST return exactly this format:
+
+    EMOTION: <emotion>
+    RESPONSE: <response>
+
+    The emotion MUST be one of:
+
+    neutral
+    happy
+    sad
+    angry
+    surprised
+
+    Choose the emotion that best matches the response.
+
+    Do not use any other emotion names.
+    Do not add anything before EMOTION.
+    Do not add anything after the response.
+    """
+            },
             {
                 "role": "user",
                 "content": user_message
@@ -107,12 +132,38 @@ def send_message():
     ai_response = response["message"]["content"]
 
 
+    # -----------------------------
+    # Extract emotion
+    # -----------------------------
+
+    lines = ai_response.splitlines()
+
+    emotion = "neutral"
+    response_text = ""
+
+
+    for line in lines:
+
+        if line.startswith("EMOTION:"):
+            emotion = line.replace("EMOTION:", "").strip()
+
+        elif line.startswith("RESPONSE:"):
+            response_text = line.replace("RESPONSE:", "").strip()
+
+
+    # -----------------------------
+    # Change character expression
+    # -----------------------------
+
+    show_expression(emotion)
+
+
     # Display AI response
     chat_box.config(state="normal")
 
     chat_box.insert(
         tk.END,
-        "AI: " + ai_response + "\n\n"
+        "Chihaya: " + response_text + "\n\n"
     )
 
     chat_box.config(state="disabled")
