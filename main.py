@@ -1,5 +1,6 @@
 import tkinter as tk
 from PIL import Image, ImageTk
+from ollama import chat
 
 
 # -----------------------------
@@ -8,7 +9,7 @@ from PIL import Image, ImageTk
 
 window = tk.Tk()
 window.title("AI Assistant")
-window.geometry("500x700")
+window.geometry("600x800")
 
 
 # -----------------------------
@@ -27,58 +28,111 @@ def show_expression(expression):
 
     image = Image.open(f"character/{expression}.png")
 
-    # Keep the original aspect ratio
+    # Keep original aspect ratio
     image.thumbnail((400, 500))
 
     character_image = ImageTk.PhotoImage(image)
 
-    # Keep a reference to the image
+    # Keep reference to image
     character_label.image = character_image
 
-    # Change the displayed image
+    # Change displayed image
     character_label.config(image=character_image)
 
 
 # -----------------------------
-# Buttons
+# Chat Area
 # -----------------------------
 
-button_frame = tk.Frame(window)
-button_frame.pack(pady=20)
+chat_box = tk.Text(
+    window,
+    height=10,
+    width=60,
+    state="disabled"
+)
 
-tk.Button(
-    button_frame,
-    text="Neutral",
-    command=lambda: show_expression("neutral")
-).pack(side="left", padx=5)
-
-tk.Button(
-    button_frame,
-    text="Happy",
-    command=lambda: show_expression("happy")
-).pack(side="left", padx=5)
-
-tk.Button(
-    button_frame,
-    text="Sad",
-    command=lambda: show_expression("sad")
-).pack(side="left", padx=5)
-
-tk.Button(
-    button_frame,
-    text="Angry",
-    command=lambda: show_expression("angry")
-).pack(side="left", padx=5)
-
-tk.Button(
-    button_frame,
-    text="Surprised",
-    command=lambda: show_expression("surprised")
-).pack(side="left", padx=5)
+chat_box.pack(pady=10)
 
 
 # -----------------------------
-# Start with Neutral
+# User Input
+# -----------------------------
+
+input_box = tk.Entry(
+    window,
+    width=50
+)
+
+input_box.pack(pady=5)
+
+
+# -----------------------------
+# Send Message
+# -----------------------------
+
+def send_message():
+
+    user_message = input_box.get()
+
+    if user_message == "":
+        return
+
+    # Display user's message
+    chat_box.config(state="normal")
+
+    chat_box.insert(
+        tk.END,
+        "You: " + user_message + "\n"
+    )
+
+    chat_box.config(state="disabled")
+
+    # Clear input box
+    input_box.delete(0, tk.END)
+
+
+    # Send message to Gemma
+    response = chat(
+        model="gemma3:4b",
+        messages=[
+            {
+                "role": "user",
+                "content": user_message
+            }
+        ]
+    )
+
+
+    # Get Gemma's response
+    ai_response = response["message"]["content"]
+
+
+    # Display AI response
+    chat_box.config(state="normal")
+
+    chat_box.insert(
+        tk.END,
+        "AI: " + ai_response + "\n\n"
+    )
+
+    chat_box.config(state="disabled")
+
+
+# -----------------------------
+# Send Button
+# -----------------------------
+
+send_button = tk.Button(
+    window,
+    text="Send",
+    command=send_message
+)
+
+send_button.pack(pady=5)
+
+
+# -----------------------------
+# Start with Neutral Expression
 # -----------------------------
 
 show_expression("neutral")
