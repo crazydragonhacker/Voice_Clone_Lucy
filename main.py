@@ -1,6 +1,26 @@
 import tkinter as tk
 from PIL import Image, ImageTk
 from ollama import chat
+from piper import PiperVoice
+import wave
+import winsound
+
+voice = PiperVoice.load("en_US-amy-medium.onnx")
+
+# -----------------------
+#Create a voice function
+# -----------------------
+
+def speak(text):
+
+    with wave.open("response.wav", "wb") as wav_file:
+
+        voice.synthesize_wav(text, wav_file)
+
+    winsound.PlaySound(
+        "response.wav",
+        winsound.SND_FILENAME
+    )
 
 
 # -----------------------------
@@ -167,6 +187,8 @@ def send_message():
     )
 
     chat_box.config(state="disabled")
+
+    speak(response_text)
 
 
 # -----------------------------
