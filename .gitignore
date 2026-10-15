@@ -1,0 +1,38 @@
+﻿# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Generated speech and private voice recordings
+samples/
+output/
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.ogg
+
+# Downloaded models and checkpoints
+models/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+*.onnx
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets.json
+
+# Editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
