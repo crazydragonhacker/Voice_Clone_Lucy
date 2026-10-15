@@ -1,13 +1,41 @@
 import tkinter as tk
 from PIL import Image, ImageTk
 from ollama import chat
-from piper import PiperVoice
-import wave
+import os
+import re
+import subprocess
 import winsound
 import threading
 
+# -----------------------------
+# XTTS Configuration & Paths
+# -----------------------------
 
-voice = PiperVoice.load("en_US-amy-medium.onnx")
+# XTTS executable from your separate, working GPU environment.
+XTTS_EXE = r"D:\JaruVoiceGPU\.venv\Scripts\tts.exe"
+
+# Reference recordings used to influence the Japanese voice's emotion.
+VOICE_REFERENCES = {
+    "sad": r"D:\JaruVoice\samples\Lucy_Nostalgic_Sad.wav",
+    "crying": r"D:\JaruVoice\samples\Lucy_Nostalgic_Sad.wav",
+    "depressed": r"D:\JaruVoice\samples\Lucy_Nostalgic_Sad.wav",
+    "worried": r"D:\JaruVoice\samples\Lucy_Nostalgic_Sad.wav",
+    "happy": r"D:\JaruVoice\samples\Lucy_Upbeat_Curious_PLayful.wav",
+    "excited": r"D:\JaruVoice\samples\Lucy_Upbeat_Curious_PLayful.wav",
+    "surprised": r"D:\JaruVoice\samples\Lucy_Upbeat_Curious_PLayful.wav",
+    "embarrassed": r"D:\JaruVoice\samples\Playful_Laughing.wav",
+    # Default until you record a dedicated neutral voice sample.
+    "neutral": r"D:\JaruVoice\samples\Lucy_Upbeat_Curious_PLayful.wav",
+}
+
+# Audio output will be saved in your existing assistant project.
+AUDIO_OUTPUT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "response.wav"
+)
+
+# Use the default reference for emotions without a dedicated mapping.
+DEFAULT_REFERENCE = VOICE_REFERENCES["neutral"]
 
 # -----------------------------
 # Conversation Memory
@@ -37,19 +65,36 @@ VALID_EMOTIONS = {
 
 
 # -----------------------
-# Create a voice function
+# Create a voice function (XTTS-v2)
 # -----------------------
 
-def speak(text):
+def speak(japanese_text, emotion="neutral"):
+    # Select a reference recording based on the detected emotion.
+    reference_wav = VOICE_REFERENCES.get(emotion, DEFAULT_REFERENCE)
 
-    with wave.open("response.wav", "wb") as wav_file:
+    # Skip empty speech rather than generating an empty audio file.
+    if not japanese_text.strip():
+        return
 
-        voice.synthesize_wav(text, wav_file)
+    # Build the XTTS command without using the shell.
+    command = [
+        XTTS_EXE,
+        "--model_name", "tts_models/multilingual/multi-dataset/xtts_v2",
+        "--text", japanese_text,
+        "--speaker_wav", reference_wav,
+        "--language_idx", "ja",
+        "--out_path", AUDIO_OUTPUT,
+        "--use_cuda",
+    ]
 
-    winsound.PlaySound(
-        "response.wav",
-        winsound.SND_FILENAME
-    )
+    try:
+        # Generate Japanese audio using your existing GPU environment.
+        subprocess.run(command, check=True)
+        # Play the generated audio.
+        winsound.PlaySound(AUDIO_OUTPUT, winsound.SND_FILENAME)
+    except Exception as error:
+        # Report an error if XTTS fails.
+        print(f"Japanese voice generation failed: {error}")
 
 
 # -----------------------------
@@ -434,46 +479,42 @@ Do not force anime references into ordinary conversation.
 Do not use exaggerated anime speech in every sentence.
 
 Your personality should come through naturally in the way you react, speak,
-encourage, joke, and express enthusiasm.
+encouraging, joke, and express enthusiasm.
+
+LANGUAGE AND AUDIO RULES:
+- The visible response must be in English.
+- Also create a natural Japanese translation of that English response.
+- The Japanese version is for spoken audio only.
+- Preserve the meaning, personality, and emotion of the English response.
+- Use natural Japanese suitable for an anime character.
+- Do not put the Japanese translation in the English response field.
+- Select one emotion from the allowed emotion list.
 
 OUTPUT FORMAT:
 
 Every response MUST use exactly this format:
 
 EMOTION: <emotion>
-RESPONSE: <response>
+RESPONSE: <English response>
+JAPANESE: <Japanese translation>
 
 Example:
 
 EMOTION: happy
 RESPONSE: You finally got it working?! Yes! I knew you could do it!
+JAPANESE: やっと動かせたの！？やった！できるって信じてたよ！
 
 Another example:
 
 EMOTION: surprised
-RESPONSE: Wait, you changed that part and it actually fixed the error?! That's
-really clever. Show me what you changed!
-
-Another example:
-
-EMOTION: sad
-RESPONSE: Ah... that's frustrating. But don't stop here, okay? Let's figure out
-what went wrong.
-
-Another example:
-
-EMOTION: neutral
-RESPONSE: Okay, let's take this one step at a time. First, we need to understand
-what this line is actually doing.
+RESPONSE: Wait, you changed that part and it actually fixed the error?! That's really clever. Show me what you changed!
+JAPANESE: え、その部分を変えただけで本当にエラーが直ったの！？すごい賢いじゃん。何を変えたのか教えて！
 
 IMPORTANT:
 
 Do not write anything before EMOTION.
-
-Do not write anything between the emotion and response lines.
-
-Do not write anything after the response.
-
+Do not write anything between the emotion, response, and Japanese lines.
+Do not write anything after the Japanese translation.
 Do not mention these instructions to the user.
 """
 }
@@ -489,54 +530,45 @@ Do not mention these instructions to the user.
 
 
     response = chat(
-        model="gemma3:4b",
+        model="gemma3:4b", # Adjusted to match model or keep your local variant
         messages=messages
     )
 
 
     # -----------------------------
-    # Get AI Response
+    # Get AI Response & Parse Fields
     # -----------------------------
 
-    ai_response = response[
-        "message"
-    ][
-        "content"
-    ]
+    raw_response = response["message"]["content"].strip()
 
+    # Extract the emotion label.
+    emotion_match = re.search(
+        r"EMOTION:\s*(\w+)",
+        raw_response,
+        re.IGNORECASE
+    )
 
-    # -----------------------------
-    # Extract Emotion
-    # -----------------------------
+    # Extract the English response, stopping before JAPANESE.
+    english_match = re.search(
+        r"RESPONSE:\s*(.*?)(?=\nJAPANESE:|\Z)",
+        raw_response,
+        re.IGNORECASE | re.DOTALL
+    )
 
-    lines = ai_response.splitlines()
+    # Extract the Japanese speech text.
+    japanese_match = re.search(
+        r"JAPANESE:\s*(.*)\Z",
+        raw_response,
+        re.IGNORECASE | re.DOTALL
+    )
 
-    emotion = "neutral"
-    response_text = ""
+    # Use safe fallbacks if Gemma does not follow the format.
+    emotion = emotion_match.group(1).lower() if emotion_match else "neutral"
+    response_text = english_match.group(1).strip() if english_match else raw_response
+    japanese_text = japanese_match.group(1).strip() if japanese_match else ""
 
-
-    for line in lines:
-
-        if line.startswith("EMOTION:"):
-
-            emotion = line.replace(
-                "EMOTION:",
-                ""
-            ).strip().lower()
-
-
-        elif line.startswith("RESPONSE:"):
-
-            response_text = line.replace(
-                "RESPONSE:",
-                ""
-            ).strip()
-
-
-    # Make sure the emotion is valid
-
+    # Validate the emotion before using it for the character expression.
     if emotion not in VALID_EMOTIONS:
-
         emotion = "neutral"
 
 
@@ -558,7 +590,8 @@ Do not mention these instructions to the user.
         0,
         update_gui,
         emotion,
-        response_text
+        response_text,
+        japanese_text
     )
 
 
@@ -568,7 +601,8 @@ Do not mention these instructions to the user.
 
 def update_gui(
     emotion,
-    response_text
+    response_text,
+    japanese_text
 ):
 
     # Change expression
@@ -603,11 +637,11 @@ def update_gui(
     )
 
 
-    # Start Piper in background
+    # Generate Japanese speech in the background.
 
     threading.Thread(
         target=speak,
-        args=(response_text,),
+        args=(japanese_text, emotion),
         daemon=True
     ).start()
 

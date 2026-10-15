@@ -1,3 +1,32 @@
+
+# Python environments
 .venv/
+venv/
+env/
+
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Generated speech audio
+output/audio/
+response.wav
+*.wav
+
+# Model checkpoints and downloaded models
+*.pth
+*.pt
+*.onnx
+*.ckpt
+models/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
